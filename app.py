@@ -12,6 +12,10 @@ st.set_page_config(page_title="Identity Compiler", layout="wide")
 
 st.title("Identity Compiler")
 st.caption("Not education. Proof-of-work enforcement. Evidence-gated readiness.")
+# Store last compiled result so Intake can reflect the pasted persona
+if "last_resp" not in st.session_state:
+    st.session_state["last_resp"] = None
+
 
 # Sidebar controls
 st.sidebar.header("Run Mode")
@@ -27,24 +31,48 @@ st.sidebar.write("• No courses, no certifications, no study plans")
 st.sidebar.write("• Only: Produce, Publish, Demonstrate, Evaluate")
 st.sidebar.write("• Gate: refuses premature applying")
 
-# Intake (Screen 1)
 st.markdown("## 1) Intake")
+
+# If we already compiled once, reflect persona from JSON profile
+last_resp = st.session_state.get("last_resp")
+profile = last_resp.profile if last_resp else {}
+
+default_current_role = profile.get("current_role", "SAP S/4HANA Solution Architect (MM, P2P, IS-Retail)")
+default_target_role = profile.get("target_role", "SAP AI Architect (enterprise)")
+default_geography = profile.get("geography", "UK")
+default_time_budget = str(profile.get("time_budget_hours_per_week", 6))
+default_preference = profile.get("preference", "strongest_long_term")
+default_evidence = profile.get("existing_evidence", ["https://github.com/avikjudemo/sap-sentinel"])
+
+# Convert evidence list to textarea text
+if isinstance(default_evidence, list):
+    default_evidence_text = "\n".join(default_evidence)
+else:
+    default_evidence_text = str(default_evidence)
+
+geo_options = ["UK", "EU", "India", "US"]
+geo_index = geo_options.index(default_geography) if default_geography in geo_options else 0
+
+pref_options = ["strongest_long_term", "balanced", "fastest_employable"]
+pref_index = pref_options.index(default_preference) if default_preference in pref_options else 0
+
 with st.form("intake_form", clear_on_submit=False):
     col1, col2 = st.columns(2)
+
     with col1:
-        current_role = st.text_input("Current role", value="SAP S/4HANA Solution Architect (MM, P2P, IS-Retail)")
-        years = st.text_input("Years of experience", value="15+")
-        geography = st.selectbox("Geography", ["UK", "EU", "India", "US"], index=0)
+        current_role = st.text_input("Current role", value=default_current_role)
+        geography = st.selectbox("Geography", geo_options, index=geo_index)
+
     with col2:
-        target_role = st.text_input("Target role", value="SAP AI Architect (enterprise)")
-        time_budget = st.selectbox("Time budget per week (fixed for this hackathon)", ["6 hours/week"], index=0)
+        target_role = st.text_input("Target role", value=default_target_role)
+        st.text_input("Time budget per week", value=f"{default_time_budget} hours/week", disabled=True)
         evidence_links = st.text_area(
             "Existing public evidence (links)",
-            value="https://github.com/avikjudemo/sap-sentinel\nhttps://github.com/avikjudemo",
+            value=default_evidence_text,
             height=90,
         )
 
-    preference = st.selectbox("Preference", ["strongest_long_term", "balanced", "fastest_employable"], index=0)
+    preference = st.selectbox("Preference", pref_options, index=pref_index)
     compile_clicked = st.form_submit_button("Compile Identity")
 
 st.markdown("---")
@@ -73,6 +101,10 @@ if compiler_json_text and compile_clicked:
     try:
         raw = safe_load_json(compiler_json_text)
         resp = validate_compiler_response(raw)
+        # Persist response so Intake reflects the persona for subsequent runs
+        st.session_state["last_resp"] = resp
+
+
         outputs = resp.outputs
 
         # Normalize verdict for display
